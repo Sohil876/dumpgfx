@@ -22,11 +22,14 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef WIN32
 #include <unistd.h>
+#endif
 #include <zlib.h>
 #include "unzip.h"
 #include "type.h"
 #include "driver.h"
+#include "neocrypt.h"
 
 static LIST *driver_list=NULL;
 enum {
@@ -37,24 +40,9 @@ enum {
     TILE_TRANSPARENT50
 };
 
-typedef struct neogeoroms {
-    Uint8 *sfix_board;
-    Uint8 *sfix_game;
-    Uint32 sfix_size;
-    Uint8 *sound1;
-    Uint32 sound1_size;
-    Uint8 *sound2;
-    Uint32 sound2_size;
-    Uint8 *gfx;
-    Uint32 gfx_size;
-    Uint32 nb_of_tiles;
-    //tile **tile_in_cache;
-    Uint32 *pen_usage;
-    Uint8 fix_board_usage[4096];
-    Uint8 *fix_game_usage;
-        
-}neogeoroms;
-static neogeoroms memory;
+neogeoroms memory;
+
+extern int neogeo_fix_bank_type;
 
 #define CHECK_ALLOC(a) {if (!a) {printf("Out of Memory\n");exit(1);}}
 
@@ -287,6 +275,7 @@ static void add_driver(FILE *f)
     dr->rom_type=get_romtype_by_name(type);
     dr->special_bios=0;
     dr->banksw_type=BANKSW_NORMAL;
+    dr->sfix_bank=0;
     t = strchr(buf, '"');
     if (t) {
 	char *e;
@@ -313,6 +302,7 @@ static void add_driver(FILE *f)
 	    int b=0;
 	    if (strcmp(a,"BIOS")==0) { add_driver_section(s,&(dr->bios), f); dr->special_bios=1;}
 	    else if (strcmp(a,"XOR")==0) { dr->xor=s; }
+	    else if (strcmp(a,"SFIXBANK")==0) { dr->sfix_bank=s; }
 	    else if (strcmp(a,"BANKSWITCH")==0) {
 		dr->banksw_type=s;
 		if(s==BANKSW_SCRAMBLE) {
@@ -386,7 +376,7 @@ SDL_bool dr_load_driver(char *filename) {
     LIST *i;
 
 
-    f=fopen(filename,"r");
+    f=fopen(filename,"rb");
     if (!f) {
 	printf("Couldn't find %s\n",filename);
 	return SDL_FALSE;
@@ -616,7 +606,7 @@ SDL_bool dump_gfx(char *name) {
     f=fopen(filename,"wb");
     if (!f) return SDL_FALSE;
     fwrite(memory.gfx,memory.gfx_size,1,f);
-    fwrite(memory.pen_usage,memory.nb_of_tiles*sizeof(Uint32),1,f);
+    fwrite(memory.pen_usage,(memory.gfx_size >> 7)*sizeof(Uint32),1,f);
     fclose(f);
 }    
 
@@ -643,7 +633,9 @@ SDL_bool dr_load_game(DRIVER *dr,char *name) {
 
 	    break;
 	case SEC_SFIX:
+        //printf("alloc sfix memory(%d)...\n", s);
 		memory.sfix_game = malloc(s); CHECK_ALLOC(memory.sfix_game);
+		memory.sfix_size = s;
 		memory.fix_game_usage = malloc(s >> 5);
 		CHECK_ALLOC(memory.fix_game_usage);
 	    break;
@@ -677,21 +669,23 @@ SDL_bool dr_load_game(DRIVER *dr,char *name) {
 	}
     }
     unzClose(gz);
-
+    
+    neogeo_fix_bank_type = dr->sfix_bank;
+    
     if (dr->rom_type == MGD2) {
         printf("convert MGD2 tiles\n");
 	    convert_mgd2_tiles(memory.gfx, memory.gfx_size);
 	    convert_mgd2_tiles(memory.gfx, memory.gfx_size);
     }
 /* TODO */
-#if 0
-    if (conf.rom_type == MVS_CMC42) {
-	    printf("Decrypt GFX ");
-	    kof99_neogeo_gfx_decrypt(conf.extra_xor);
+#if 1
+    if (dr->rom_type == MVS_CMC42) {
+	    printf("Decrypt GFX\n");
+	    kof99_neogeo_gfx_decrypt(dr->xor);
     }
-    if (conf.rom_type == MVS_CMC50) {
-	    printf("Decrypt GFX ");
-	    kof2000_neogeo_gfx_decrypt(conf.extra_xor);
+    if (dr->rom_type == MVS_CMC50) {
+	    printf("Decrypt GFX\n");
+	    kof2000_neogeo_gfx_decrypt(dr->xor);
     }
 #endif
 

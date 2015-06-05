@@ -77,11 +77,30 @@ typedef struct DRIVER {
     /* crypted rom bankswitch support */
     BANKSW_TYPE banksw_type;
     Uint8 xor;
+    Uint8 sfix_bank;
     Uint32 banksw_addr;
     Uint8  banksw_unscramble[6];
     Uint32 banksw_off[64];
 //    struct DRIVER *next;
 }DRIVER;
+
+typedef struct neogeoroms {
+    Uint8 *sfix_board;
+    Uint8 *sfix_game;
+    Uint32 sfix_size;
+    Uint8 *sound1;
+    Uint32 sound1_size;
+    Uint8 *sound2;
+    Uint32 sound2_size;
+    Uint8 *gfx;
+    Uint32 gfx_size;
+    Uint32 nb_of_tiles;
+    //tile **tile_in_cache;
+    Uint32 *pen_usage;
+    Uint8 fix_board_usage[4096];
+    Uint8 *fix_game_usage;
+
+}neogeoroms;
 
 void dr_list_all(void);
 SDL_bool dr_load_driver(char *filename);
